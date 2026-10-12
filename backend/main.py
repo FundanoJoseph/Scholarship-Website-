@@ -477,7 +477,7 @@ def register(body: RegisterBody, response: Response):
         "program": body.program.strip(),
         "year_level": body.year_level.strip(),
     }
-    created = first(execute_or_raise(get_db().table("users").insert(user_row).select("*").single()))
+    created = first(execute_or_raise(get_db().table("users").insert(user_row).select("*")))
     write_audit(created["id"], "account_registered", "user", created["id"], created["id"], {"role": "student"})
     set_auth_cookie(response, created)
     return {"user": public_user(created)}
@@ -496,7 +496,6 @@ def login(body: LoginBody, response: Response):
                 .eq("id", user["id"])
                 .is_("deleted_at", "null")
                 .select("*")
-                .single()
             )
         )
         user = updated or user
@@ -536,7 +535,6 @@ def update_own_profile(body: ProfilePatchBody, user=Depends(require_student)):
         .eq("id", user["id"])
         .is_("deleted_at", "null")
         .select("*")
-        .single()
     )
     return {"user": public_user(first(response))}
 
@@ -555,7 +553,6 @@ def change_own_password(body: ChangePasswordBody, response: Response, user=Depen
             .eq("id", user["id"])
             .is_("deleted_at", "null")
             .select("*")
-            .single()
         )
     )
     write_audit(user["id"], "password_changed", "user", user["id"], user["id"])
@@ -587,7 +584,7 @@ def create_staff_account(body: AccountCreateBody, user=Depends(require_admin)):
         "program": "",
         "year_level": "",
     }
-    created = first(execute_or_raise(get_db().table("users").insert(new_row).select("*").single()))
+    created = first(execute_or_raise(get_db().table("users").insert(new_row).select("*")))
     write_audit(user["id"], "account_created", "user", created["id"], created["id"], {"role": body.role})
     return {"user": public_user(created)}
 
@@ -756,7 +753,7 @@ def submit_application(body: ApplicationCreateBody, user=Depends(require_student
     created_application = None
     try:
         created_application = first(
-            execute_or_raise(get_db().table("applications").insert(application_record).select("*").single())
+            execute_or_raise(get_db().table("applications").insert(application_record).select("*"))
         )
         execute_or_raise(get_db().table("application_files").insert(file_rows))
         execute_or_raise(
@@ -879,7 +876,6 @@ def delete_application(application_id: UUID, user=Depends(require_staff)):
             .eq("is_archived", False)
             .is_("deleted_at", "null")
             .select("*")
-            .single()
         )
     )
     if not updated:
