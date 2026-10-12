@@ -7,8 +7,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.database import execute_or_raise, first, get_db, rows
-from backend.main import normalize_email, validate_full_name, validate_password, validate_university_email
+from backend.database import first, get_db, rows
+from backend.main import (
+    execute_or_raise,
+    normalize_email,
+    validate_full_name,
+    validate_password,
+    validate_university_email,
+)
 from backend.security import hash_password
 
 
@@ -61,16 +67,17 @@ def main():
             .eq("id", existing["id"])
             .is_("deleted_at", "null")
             .select("id,email,role")
-            .single()
         )
     else:
         result = execute_or_raise(
             database.table("users")
             .insert({**values, "student_id": "", "program": "", "year_level": ""})
             .select("id,email,role")
-            .single()
         )
-    print(f"Admin ready: {result.data['email']} ({result.data['id']})")
+    result = first(result)
+    if not result:
+        raise SystemExit("Admin account could not be read back after saving.")
+    print(f"Admin ready: {result['email']} ({result['id']})")
 
 
 if __name__ == "__main__":
