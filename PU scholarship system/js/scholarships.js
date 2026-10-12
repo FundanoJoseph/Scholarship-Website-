@@ -24,8 +24,7 @@ function openProgramModal(key) {
   selectedScholarship = getScholarshipInfo(key);
   if (!selectedScholarship) return;
   const noticeText =
-    "Program specific eligibility rules are confirmed by the CSS Office. Authorized Staff review your documents manually, " +
-    "the system does not grade you or decide eligibility automatically.";
+    "The application checks the GWA, lowest-grade and grade-remark information you enter. Authorized Staff verify it against your uploaded documents and make the final scholarship decision.";
   el("programModalTitle").textContent = selectedScholarship.key;
   el("programModalBody").innerHTML = `
     <span class="micro">University program</span>
@@ -55,8 +54,12 @@ function openApplyModal() {
   chosenFileObjects = {};
   el("applyForm").reset();
   hideAlert("applyAlert");
-  clearFieldErrors(["applyProgramError", "applyYearError", "applyDocsError", "applyConsentError"]);
+  clearFieldErrors(["applyProgramError", "applyYearError", "applyGwaError", "applyLowestGradeError", "applyEligibilityError", "applyDocsError", "applyConsentError"]);
   el("applyScholarshipName").textContent = selectedScholarship.key;
+  const higherThreshold = selectedScholarship.key === "Academic Scholarship" || selectedScholarship.key === "Entrance Exam Scholarship";
+  const minimumGwa = higherThreshold ? 87 : 85;
+  const minimumGrade = higherThreshold ? 85 : 82;
+  el("eligibilityHint").textContent = `This scholarship requires a GWA of at least ${minimumGwa}, no grade below ${minimumGrade}, and no failing grade, INC, or dropped remarks.`;
   el("applicantInfo").innerHTML = `
     <dt>Full name</dt><dd>${escapeHtml(currentUser.fullName)}</dd>
     <dt>Student ID</dt><dd>${escapeHtml(currentUser.studentId)}</dd>
@@ -113,9 +116,19 @@ function handleFileChosen(input) {
 async function handleApplicationSubmit(e) {
   e.preventDefault();
   hideAlert("applyAlert");
-  clearFieldErrors(["applyProgramError", "applyYearError", "applyDocsError", "applyConsentError"]);
+  clearFieldErrors(["applyProgramError", "applyYearError", "applyGwaError", "applyLowestGradeError", "applyEligibilityError", "applyDocsError", "applyConsentError"]);
   const program = val("applyProgram");
   const yearLevel = el("applyYearLevel").value;
+  const gwaText = val("applyGwa");
+  const lowestGradeText = val("applyLowestGrade");
+  const higherThreshold = selectedScholarship.key === "Academic Scholarship" || selectedScholarship.key === "Entrance Exam Scholarship";
+  const minimumGwa = higherThreshold ? 87 : 85;
+  const minimumGrade = higherThreshold ? 85 : 82;
+  const gwa = Number(gwaText);
+  const lowestGrade = Number(lowestGradeText);
+  const hasFailingGrade = el("applyHasFailingGrade").checked;
+  const hasIncompleteGrade = el("applyHasIncompleteGrade").checked;
+  const hasDroppedGrade = el("applyHasDroppedGrade").checked;
   let hasError = false;
   const programCheck = checkLettersOnly(program, "Degree program");
   if (!programCheck.valid) {
@@ -124,6 +137,18 @@ async function handleApplicationSubmit(e) {
   }
   if (!yearLevel) {
     showFieldError("applyYearError", "Please select your year level.");
+    hasError = true;
+  }
+  if (!gwaText || !Number.isFinite(gwa) || gwa < minimumGwa || gwa > 100) {
+    showFieldError("applyGwaError", `Enter a GWA from ${minimumGwa} to 100.`);
+    hasError = true;
+  }
+  if (!lowestGradeText || !Number.isFinite(lowestGrade) || lowestGrade < minimumGrade || lowestGrade > 100) {
+    showFieldError("applyLowestGradeError", `Enter a lowest grade from ${minimumGrade} to 100.`);
+    hasError = true;
+  }
+  if (hasFailingGrade || hasIncompleteGrade || hasDroppedGrade) {
+    showFieldError("applyEligibilityError", "Eligibility requires no failing grade, INC, or dropped remarks.");
     hasError = true;
   }
   const missing = SCHOLARSHIP_REQUIREMENTS.filter((item) => !chosenFiles[item.key]);
@@ -142,30 +167,43 @@ async function handleApplicationSubmit(e) {
   const button = el("applyForm").querySelector("button[type=submit]");
   button.disabled = true;
   button.innerHTML = '<i class="ti ti-loader-2"></i> Uploading...';
+  const uploadedPaths = [];
   try {
     const applicationId = newId();
     const documents = {};
     for (const item of SCHOLARSHIP_REQUIREMENTS) {
       const file = chosenFileObjects[item.key];
       const path = storagePathFor(currentUser.id, applicationId, item.key, file.name);
-      await uploadStoredFile(path, file);
-      documents[item.key] = { name: file.name, path, uploadedAt: chosenFiles[item.key].uploadedAt };
+      uploadedPaths.push(path);
+      const storedPath = await uploadStoredFile(path, file);
+      documents[item.key] = {
+        name: file.name,
+        path: storedPath,
+        uploadedAt: chosenFiles[item.key].uploadedAt,
+        sizeBytes: file.size,
+        mimeType: fileMimeType(file),
+      };
     }
     const application = await createApplication({
       id: applicationId,
-      studentUserId: currentUser.id,
-      studentName: currentUser.fullName,
-      studentId: currentUser.studentId,
-      universityEmail: currentUser.email,
       program,
       yearLevel,
       scholarshipType: selectedScholarship.key,
+      gwa,
+      lowestGrade,
+      hasFailingGrade,
+      hasIncompleteGrade,
+      hasDroppedGrade,
       documents,
     });
-    await updateOwnProfile(currentUser.id, { program, yearLevel });
     setFlash(`Application ${application.code} submitted successfully! Your earlier applications were kept.`);
     window.location.href = "my-applications.html";
   } catch (error) {
+    try {
+      if (uploadedPaths.length) await discardStoredFiles(uploadedPaths);
+    } catch (cleanupError) {
+      console.error(cleanupError);
+    }
     console.error(error);
     showAlert("applyAlert", friendlyError(error));
     button.disabled = false;

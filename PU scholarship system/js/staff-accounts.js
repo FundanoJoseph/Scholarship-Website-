@@ -169,7 +169,8 @@ function askToDeleteAccount(id) {
   if (!account) return;
   deletingId = id;
   hideAlert("deleteAcctAlert");
-  el("deleteAcctText").textContent = `Are you sure you want to delete the ${account.role === "admin" ? "Admin" : "Authorized Staff"} account of ${account.fullName} (${account.email})? They will no longer be able to sign in. This cannot be undone.`;
+  const roleName = account.role === "admin" ? "Admin" : account.role === "staff" ? "Authorized Staff" : "Student";
+  el("deleteAcctText").textContent = `Are you sure you want to delete the ${roleName} account of ${account.fullName} (${account.email})? They will no longer be able to sign in, but their application records will be retained.`;
   openModal("deleteAccountModal");
 }
 

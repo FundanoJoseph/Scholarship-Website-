@@ -30,7 +30,8 @@ async function showOverview() {
   const pastCount = (await getApplicationsForStudent(currentUser.id)).length - applications.length;
   const latest = applications[0];
   el("welcomeName").textContent = currentUser.fullName.split(" ")[0];
-  el("termText").textContent = currentTermLabel();
+  const currentLabel = await currentTermLabel();
+  el("termText").textContent = currentLabel;
   el("statPrograms").textContent = twoDigits(SCHOLARSHIP_CATALOG.length);
   el("statApplications").textContent = twoDigits(applications.length);
   if (latest) {
@@ -38,7 +39,7 @@ async function showOverview() {
     el("statStatusNote").textContent = "Open My Applications for the full history";
   }
   el("latestApplication").innerHTML = latest
-    ? applicationCardHtml(latest)
+    ? applicationCardHtml(latest, currentLabel)
     : `
     <div class="card empty-state">
       <i class="ti ti-clipboard-off icon"></i>
@@ -52,7 +53,7 @@ async function showOverview() {
   ).join("");
 }
 
-function applicationCardHtml(app) {
+function applicationCardHtml(app, currentLabel) {
   const decided = app.status === "Approved" || app.status === "Rejected";
   const rejected = app.status === "Rejected";
   const evaluationStep = decided ? "done" : "current";
@@ -71,7 +72,7 @@ function applicationCardHtml(app) {
         <div>
           <span class="micro">${app.code}</span>
           <h3>${app.scholarshipType}</h3>
-          <p>${escapeHtml(app.term || currentTermLabel())}</p>
+          <p>${escapeHtml(app.term || currentLabel)}</p>
         </div>
       </div>
 

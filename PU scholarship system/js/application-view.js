@@ -1,5 +1,10 @@
 function applicationDetailsHtml(app, editable) {
-  const discountEditable = editable && app.status === "Approved";
+  const discountEditable = editable && app.status === "Approved" && !app.archived;
+  const gradeRemarks = [
+    app.hasFailingGrade ? "Failing grade" : "",
+    app.hasIncompleteGrade ? "INC" : "",
+    app.hasDroppedGrade ? "Dropped" : "",
+  ].filter(Boolean);
   const documentsHtml = SCHOLARSHIP_REQUIREMENTS.map((requirement) => {
     const doc = app.documents[requirement.key];
     if (doc && doc.name) {
@@ -49,6 +54,9 @@ function applicationDetailsHtml(app, editable) {
       <dt>Student</dt><dd>${escapeHtml(app.studentName)} (${escapeHtml(app.studentId)})</dd>
       <dt>Email</dt><dd>${escapeHtml(app.universityEmail)}</dd>
       <dt>Program / year</dt><dd>${escapeHtml(app.program)} &middot; ${escapeHtml(app.yearLevel)}</dd>
+      <dt>GWA</dt><dd>${app.gwa ? escapeHtml(app.gwa) : "\u2014"}</dd>
+      <dt>Lowest grade</dt><dd>${app.lowestGrade ? escapeHtml(app.lowestGrade) : "\u2014"}</dd>
+      <dt>Grade remarks</dt><dd>${gradeRemarks.length ? escapeHtml(gradeRemarks.join(", ")) : "No failing grade, INC, or dropped remarks declared"}</dd>
       <dt>Term</dt><dd>${escapeHtml(app.term || "\u2014")}</dd>
       <dt>Submitted</dt><dd>${formatDate(app.dateSubmitted)}</dd>
       <dt>Tuition fee discount</dt><dd data-discount-cell><span class="discount-value">${app.discountPercent ? escapeHtml(app.discountPercent) + "%" : "\u2014"}</span>${discountEditable ? ' <button type="button" class="icon-btn" data-discount-action="edit" title="Edit discount"><i class="ti ti-pencil"></i></button>' : ""}</dd>

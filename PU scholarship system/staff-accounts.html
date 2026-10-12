@@ -21,14 +21,14 @@
     <div>
       <div class="eyebrow">Admin only</div>
       <h1>Account Management</h1>
-      <p>Create, edit and delete Authorized Staff and Admin accounts.</p>
+      <p>Create staff or admin accounts, and manage the name, email, role, password and access of every account.</p>
     </div>
     <button type="button" class="btn btn-primary" id="openAddAccountBtn"><i class="ti ti-user-plus"></i> Create Staff/Admin account</button>
   </div>
 
   <div class="notice">
     <i class="ti ti-info-circle"></i>
-    <span>Only students can register themselves. Staff and Admin accounts are created here by an Admin.</span>
+    <span>Students register themselves. Admins can create staff accounts and manage any account here; deleted accounts cannot sign in, while their application records are retained.</span>
   </div>
 
   <section class="card card-flush">
@@ -131,6 +131,7 @@
         <div class="input-wrap">
           <i class="ti ti-shield"></i>
           <select id="editAcctRole">
+            <option value="student">Student</option>
             <option value="staff">Authorized Staff</option>
             <option value="admin">Admin</option>
           </select>
@@ -172,6 +173,7 @@
 </div>
 
 <script src="js/validation.js"></script>
+<script src="js/config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/common.js"></script>
 <script src="js/change-password.js"></script>
