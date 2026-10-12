@@ -123,10 +123,8 @@ async function refreshSidebarNotifCount(userId, announceNew) {
 
 function startNotificationWatcher(user) {
   refreshSidebarNotifCount(user.id, false);
-  window.addEventListener("storage", (e) => {
-    if (e.key !== DB_KEY) return;
-    window.dispatchEvent(new CustomEvent("notification-arrived"));
-    refreshSidebarNotifCount(user.id, true);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshSidebarNotifCount(user.id, true);
   });
   setInterval(() => refreshSidebarNotifCount(user.id, true), NOTIFICATION_CHECK_MS);
 }

@@ -1,67 +1,74 @@
-const FILE_DB_NAME = "sams_files_v2";
-const FILE_STORE = "files";
-
 function safeFileName(name) {
-  return name.replace(/[^A-Za-z0-9._-]/g, "_");
+  return String(name || "").replace(/[^A-Za-z0-9._-]/g, "_");
 }
 
 function storagePathFor(userId, appId, requirementKey, fileName) {
-  return userId + "/" + appId + "/" + requirementKey + "-" + safeFileName(fileName);
+  return `${userId}/${appId}/${requirementKey}/${newId()}_${safeFileName(fileName)}`;
 }
 
-function openFileDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(FILE_DB_NAME, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(FILE_STORE);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+function fileMimeType(file) {
+  if (file && file.type) return file.type;
+  const lowerName = String(file && file.name || "").toLowerCase();
+  if (lowerName.endsWith(".pdf")) return "application/pdf";
+  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return "image/jpeg";
+  if (lowerName.endsWith(".png")) return "image/png";
+  return "application/octet-stream";
 }
 
 async function uploadStoredFile(path, file) {
-  const database = await openFileDb();
-  await new Promise((resolve, reject) => {
-    const tx = database.transaction(FILE_STORE, "readwrite");
-    tx.objectStore(FILE_STORE).put(file, path);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
+  const parts = path.split("/");
+  if (parts.length !== 4) throw new Error("The document upload path is invalid.");
+  const result = await apiRequest("/files/upload-url", {
+    method: "POST",
+    body: {
+      path,
+      applicationId: parts[1],
+      requirementKey: parts[2],
+      fileName: file.name,
+      contentType: fileMimeType(file),
+      sizeBytes: file.size,
+    },
   });
-  database.close();
+  const form = new FormData();
+  form.append("cacheControl", "3600");
+  form.append("", file, file.name);
+  const response = await fetch(result.signedUrl, { method: "PUT", body: form });
+  if (!response.ok) {
+    let message = "The document could not be uploaded to secure storage.";
+    try {
+      const data = await response.json();
+      message = data.message || data.error || message;
+    } catch (error) {
+      message = "The document could not be uploaded to secure storage.";
+    }
+    throw new Error(message);
+  }
+  return result.path;
 }
 
 async function downloadStoredFile(path) {
   if (!path) return null;
   try {
-    const database = await openFileDb();
-    const file = await new Promise((resolve, reject) => {
-      const request = database.transaction(FILE_STORE).objectStore(FILE_STORE).get(path);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
-    database.close();
-    return file;
+    const result = await apiRequest(`/files/download-url?path=${encodeURIComponent(path)}`);
+    const response = await fetch(result.signedUrl);
+    if (!response.ok) return null;
+    return await response.blob();
   } catch (error) {
     return null;
   }
 }
 
 async function deleteApplicationFiles(app) {
-  const paths = Object.values(app.documents || {})
-    .map((doc) => doc && doc.path)
+  const paths = Object.values((app && app.documents) || {})
+    .map((document) => document && document.path)
     .filter(Boolean);
   if (!paths.length) return;
-  try {
-    const database = await openFileDb();
-    await new Promise((resolve, reject) => {
-      const tx = database.transaction(FILE_STORE, "readwrite");
-      paths.forEach((path) => tx.objectStore(FILE_STORE).delete(path));
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-    database.close();
-  } catch (error) {
-    console.error("Could not remove the saved files:", error);
-  }
+  await apiRequest("/files/delete", { method: "POST", body: { paths } });
+}
+
+async function discardStoredFiles(paths) {
+  if (!paths || !paths.length) return;
+  await apiRequest("/files/discard", { method: "POST", body: { paths } });
 }
 
 function makeSamplePdf(title) {
@@ -115,14 +122,14 @@ function ensureFileModal() {
 
 async function viewStoredDocument(appId, requirementKey) {
   const app = await getApplicationById(appId);
-  const doc = app && app.documents[requirementKey];
+  const doc = app && app.documents && app.documents[requirementKey];
   if (!doc) return;
   const requirement = SCHOLARSHIP_REQUIREMENTS.find((item) => item.key === requirementKey);
   let file = doc.sample
     ? makeSamplePdf(requirement.label + " - " + doc.name)
     : await downloadStoredFile(doc.path);
   if (!file) {
-    showToast("This file could not be opened. It may have been removed from this browser.", true);
+    showToast("This file could not be opened. It may have been removed from secure storage.", true);
     return;
   }
   ensureFileModal();
